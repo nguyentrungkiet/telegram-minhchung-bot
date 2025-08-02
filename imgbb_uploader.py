@@ -1,9 +1,10 @@
 import requests
 import os
 import json
+import time
 
-def upload_to_imgbb(image_path, api_key=None):
-    """Upload ảnh lên ImgBB và trả về URL"""
+def upload_to_imgbb(image_path, api_key=None, max_retries=3):
+    """Upload ảnh lên ImgBB và trả về URL với retry mechanism"""
     
     # Ưu tiên API key từ parameter, sau đó từ env, cuối cùng từ file
     if api_key is None:
@@ -22,26 +23,51 @@ def upload_to_imgbb(image_path, api_key=None):
     if not api_key:
         raise ValueError("IMGBB_API_KEY not found in environment variables or config.json")
     
-    # Upload logic
-    try:
-        with open(image_path, 'rb') as image_file:
-            url = "https://api.imgbb.com/1/upload"
-            payload = {
-                "key": api_key,
-            }
-            files = {
-                "image": image_file
-            }
+    # Upload logic với retry
+    for attempt in range(max_retries):
+        try:
+            print(f"🔄 Attempt {attempt + 1}/{max_retries} uploading to ImgBB...")
             
-            response = requests.post(url, data=payload, files=files)
-            response.raise_for_status()
-            
-            result = response.json()
-            if result.get("success"):
-                return result["data"]["url"]
-            else:
-                raise Exception(f"ImgBB upload failed: {result}")
+            with open(image_path, 'rb') as image_file:
+                url = "https://api.imgbb.com/1/upload"
+                payload = {
+                    "key": api_key,
+                }
+                files = {
+                    "image": image_file
+                }
                 
-    except Exception as e:
-        print(f"❌ Error uploading to ImgBB: {e}")
-        return None
+                # Tăng timeout lên 30 giây
+                response = requests.post(url, data=payload, files=files, timeout=30)
+                response.raise_for_status()
+                
+                result = response.json()
+                if result.get("success"):
+                    print(f"✅ ImgBB upload successful: {result['data']['url']}")
+                    return result["data"]["url"]
+                else:
+                    raise Exception(f"ImgBB upload failed: {result}")
+                    
+        except requests.exceptions.Timeout:
+            print(f"⏰ ImgBB timeout on attempt {attempt + 1}")
+            if attempt < max_retries - 1:
+                print(f"🔄 Retrying in 2 seconds...")
+                time.sleep(2)
+            continue
+            
+        except requests.exceptions.RequestException as e:
+            print(f"🌐 Network error on attempt {attempt + 1}: {e}")
+            if attempt < max_retries - 1:
+                print(f"🔄 Retrying in 2 seconds...")
+                time.sleep(2)
+            continue
+                
+        except Exception as e:
+            print(f"❌ Error uploading to ImgBB on attempt {attempt + 1}: {e}")
+            if attempt < max_retries - 1:
+                print(f"🔄 Retrying in 2 seconds...")
+                time.sleep(2)
+            continue
+    
+    print(f"❌ Failed to upload after {max_retries} attempts")
+    return None

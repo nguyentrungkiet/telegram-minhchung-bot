@@ -112,28 +112,26 @@ async def handle_photo(update, context):
         # Tải file về máy
         await file.download_to_drive(filename)
         
-        # Upload lên ImgBB
-        logger.info(f"📤 User {user_id} đang upload ảnh {image_count} cho hoạt động: {activity_name}")
-        image_url = upload_to_imgbb(filename)
-        
+        # Upload ảnh lên ImgBB với retry
+        logger.info(f"📤 User {user_id} đang upload ảnh {len(images) + 1} cho hoạt động: {activity_name}")
+        await update.message.reply_text(f"🔄 Đang upload ảnh {len(images) + 1}... Vui lòng chờ!")
+
+        image_url = upload_to_imgbb(photo_path, max_retries=3)
+
         if image_url:
-            # Thêm link ảnh vào danh sách
-            user_state[user_id]['image_urls'].append(image_url)
-            current_count = len(user_state[user_id]['image_urls'])
-            
-            logger.info(f"✅ Upload ảnh {current_count} thành công: {image_url}")
-            
+            images.append(image_url)
             await update.message.reply_text(
-                f"✅ Ảnh {current_count} đã upload thành công!\n\n"
-                f"📋 Hoạt động: *{activity_name}*\n"
-                f"🔗 Link ảnh {current_count}: {image_url}\n\n"
-                f"📸 Tiếp tục gửi thêm ảnh hoặc gõ *'xong'* để hoàn thành!",
-                parse_mode='Markdown'
+                f"✅ Ảnh {len(images)} đã upload thành công!\n"
+                f"🔗 Link: {image_url}\n\n"
+                f"📸 Tiếp tục gửi ảnh hoặc gõ 'xong' để hoàn thành."
             )
-                
+            logger.info(f"✅ Upload thành công ảnh {len(images)}")
         else:
-            logger.error("❌ Upload ImgBB thất bại")
-            await update.message.reply_text("❌ Có lỗi khi tải ảnh lên ImgBB. Vui lòng thử lại!")
+            await update.message.reply_text(
+                f"❌ Upload ảnh {len(images) + 1} thất bại sau 3 lần thử!\n"
+                f"🔄 Vui lòng thử gửi lại ảnh này."
+            )
+            logger.error("❌ Upload ImgBB thất bại sau retry")
         
         # Xóa file tạm
         if os.path.exists(filename):
