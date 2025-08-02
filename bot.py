@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 # Lưu trạng thái người dùng
 user_state = {}
 
-# Bot token
-TOKEN = "8294341746:AAFnqVsvoFK9Gg8htYyAP9RgbH0tXYa5IDY"  # Thay bằng token bot thật
+# Bot token - đọc từ environment variable
+TOKEN = os.getenv('TOKEN') or "8294341746:AAFnqVsvoFK9Gg8htYyAP9RgbH0tXYa5IDY"
 
 def extract_sheet_id_from_url(url):
     """Trích xuất Sheet ID từ Google Sheets URL"""
