@@ -96,6 +96,8 @@ async def handle_photo(update, context):
         if 'image_urls' not in user_state[user_id]:
             user_state[user_id]['image_urls'] = []
         
+        images = user_state[user_id]['image_urls']  # FIX: Định nghĩa biến images
+        
         await update.message.reply_text("📤 Đang xử lý ảnh của bạn...")
         
         # Lấy thông tin file ảnh
@@ -106,20 +108,23 @@ async def handle_photo(update, context):
         file = await context.bot.get_file(file_id)
         
         # Tạo tên file unique
-        image_count = len(user_state[user_id]['image_urls']) + 1
+        image_count = len(images) + 1
         filename = f"photo_{update.message.date.strftime('%Y%m%d_%H%M%S')}_{user_id}_{image_count}.jpg"
         
         # Tải file về máy
         await file.download_to_drive(filename)
         
         # Upload ảnh lên ImgBB với retry
-        logger.info(f"📤 User {user_id} đang upload ảnh {len(images) + 1} cho hoạt động: {activity_name}")
-        await update.message.reply_text(f"🔄 Đang upload ảnh {len(images) + 1}... Vui lòng chờ!")
+        logger.info(f"📤 User {user_id} đang upload ảnh {image_count} cho hoạt động: {activity_name}")
+        await update.message.reply_text(f"🔄 Đang upload ảnh {image_count}... Vui lòng chờ!")
 
-        image_url = upload_to_imgbb(photo_path, max_retries=3)
+        # FIX: Dùng filename thay vì photo_path
+        image_url = upload_to_imgbb(filename, max_retries=3)
 
         if image_url:
             images.append(image_url)
+            user_state[user_id]['image_urls'] = images  # FIX: Cập nhật lại state
+            
             await update.message.reply_text(
                 f"✅ Ảnh {len(images)} đã upload thành công!\n"
                 f"🔗 Link: {image_url}\n\n"
@@ -128,7 +133,7 @@ async def handle_photo(update, context):
             logger.info(f"✅ Upload thành công ảnh {len(images)}")
         else:
             await update.message.reply_text(
-                f"❌ Upload ảnh {len(images) + 1} thất bại sau 3 lần thử!\n"
+                f"❌ Upload ảnh {image_count} thất bại sau 3 lần thử!\n"
                 f"🔄 Vui lòng thử gửi lại ảnh này."
             )
             logger.error("❌ Upload ImgBB thất bại sau retry")
@@ -140,6 +145,10 @@ async def handle_photo(update, context):
     except Exception as e:
         logger.error(f"❌ Lỗi xử lý ảnh: {str(e)}")
         await update.message.reply_text(f"❌ Có lỗi xảy ra: {str(e)}")
+        
+        # Xóa file tạm nếu có lỗi
+        if 'filename' in locals() and os.path.exists(filename):
+            os.remove(filename)
         
         # Reset trạng thái user khi có lỗi
         if user_id in user_state:
